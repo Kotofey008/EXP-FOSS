@@ -20,27 +20,18 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            ninja-build \
-            g++ \
-            gcc
+          sudo apt-get install -y cmake ninja-build gcc g++
 
       - name: Configure
-        run: |
-          cmake -S . -B build-host -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build-host --parallel 2
 
       - name: Test
-        run: |
-          ctest \
-            --test-dir build-host \
-            --output-on-failure
+        run: ctest --test-dir build-host --output-on-failure
 
-      - name: Upload host executable
+      - name: Upload Linux executable
         uses: actions/upload-artifact@v4
         with:
           name: exploration-linux
@@ -56,14 +47,11 @@ jobs:
       matrix:
         include:
           - abi: x86
-            api: 16
-
+            api: 21
           - abi: x86_64
             api: 21
-
           - abi: armeabi-v7a
-            api: 16
-
+            api: 21
           - abi: arm64-v8a
             api: 21
 
@@ -71,21 +59,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # "tools" is a retired SDK package and makes sdkmanager fail.
+          packages: platform-tools
+          accept-android-sdk-licenses: true
 
       - name: Install Android NDK
         run: |
           sdkmanager --install "ndk;27.2.12479018"
-
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" \
-            >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
       - name: Configure
         run: |
@@ -97,11 +87,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: |
-          cmake --build "build-android-${{ matrix.abi }}" \
-            --parallel 2
+        run: cmake --build "build-android-${{ matrix.abi }}" --parallel 2
 
-      - name: Upload native library
+      - name: Upload Android native library
         uses: actions/upload-artifact@v4
         with:
           name: exploration-${{ matrix.abi }}
