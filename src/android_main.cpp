@@ -182,7 +182,7 @@ extern "C" void android_main(android_app* native) {
     while(!native->destroyRequested) {
         int events;android_poll_source* source=nullptr;
         const bool active=app.display!=EGL_NO_DISPLAY&&app.focused;
-        int ident=ALooper_pollAll(active?0:-1,nullptr,&events,reinterpret_cast<void**>(&source));
+        int ident=ALooper_pollOnce(active?0:-1,nullptr,&events,reinterpret_cast<void**>(&source));
         if(ident>=0&&source)source->process(native,source);
         if(native->destroyRequested)break;
         auto now=Clock::now();float dt=std::chrono::duration<float>(now-previous).count();previous=now;
