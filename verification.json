@@ -1,0 +1,21 @@
+{
+  "host_build": "passed",
+  "ctest": "2/2 passed",
+  "host_gameplay": "movement, remove=1, place=1, save=1, load=1",
+  "android_build": "x86 API16 shared library built",
+  "apk_signatures": "v1/v2/v3 verified using apksigner",
+  "runtime_android": "NOT RUN",
+  "equivalence": "NOT ESTABLISHED",
+  "original_embedded": false,
+  "evidence_files": [
+    "rea_player_parameters.json",
+    "rea_player_constructor.json",
+    "rea_player_camera.json",
+    "rea_player_rotation.json",
+    "rea_player_select_parameters.json",
+    "rea_flat_spawn.json",
+    "rea_flat_init.json",
+    "rea_entity_player_add_delete.json",
+    "terrain_flat_rea_current.json"
+  ]
+}
