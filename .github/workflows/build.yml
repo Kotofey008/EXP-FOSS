@@ -68,7 +68,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          # "tools" is a retired SDK package and makes sdkmanager fail.
           packages: platform-tools
           accept-android-sdk-licenses: true
 
@@ -94,4 +93,111 @@ jobs:
         with:
           name: exploration-${{ matrix.abi }}
           path: build-android-${{ matrix.abi }}/libexploration_app.so
+          if-no-files-found: error
+
+  package-apk:
+    name: Package universal APK
+    runs-on: ubuntu-latest
+    needs: android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+
+      - name: Install APK packaging tools
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Download x86 library
+        uses: actions/download-artifact@v4
+        with:
+          name: exploration-x86
+          path: apk-libs/x86
+
+      - name: Download x86_64 library
+        uses: actions/download-artifact@v4
+        with:
+          name: exploration-x86_64
+          path: apk-libs/x86_64
+
+      - name: Download ARMv7 library
+        uses: actions/download-artifact@v4
+        with:
+          name: exploration-armeabi-v7a
+          path: apk-libs/armeabi-v7a
+
+      - name: Download ARM64 library
+        uses: actions/download-artifact@v4
+        with:
+          name: exploration-arm64-v8a
+          path: apk-libs/arm64-v8a
+
+      - name: Build and sign APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          PLATFORM="$ANDROID_SDK_ROOT/platforms/android-35/android.jar"
+          mkdir -p dist
+
+          # Native libraries are compiled against API 21; advertise that minimum in the APK.
+          sed 's/android:minSdkVersion="16"/android:minSdkVersion="21"/' \
+            android/AndroidManifest.xml > dist/AndroidManifest.xml
+
+          "$BT/aapt" package -f \
+            -M dist/AndroidManifest.xml \
+            -A android/assets \
+            -I "$PLATFORM" \
+            -F dist/exploration-unsigned.apk
+
+          python3 - <<'PY'
+          import pathlib
+          import zipfile
+
+          apk = pathlib.Path("dist/exploration-unsigned.apk")
+          abis = ("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
+          with zipfile.ZipFile(apk, "a") as z:
+              for abi in abis:
+                  lib = pathlib.Path("apk-libs") / abi / "libexploration_app.so"
+                  if not lib.is_file():
+                      raise SystemExit(f"Missing native library: {lib}")
+                  z.write(lib, f"lib/{abi}/libexploration_app.so", compress_type=zipfile.ZIP_STORED)
+          PY
+
+          "$BT/zipalign" -f 4 dist/exploration-unsigned.apk dist/exploration-aligned.apk
+
+          keytool -genkeypair -noprompt \
+            -keystore dist/debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey \
+            -dname "CN=Exploration Reconstruction Debug" \
+            -keyalg RSA -keysize 2048 -validity 10000
+
+          "$BT/apksigner" sign \
+            --ks dist/debug.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out dist/exploration-debug.apk \
+            dist/exploration-aligned.apk
+
+          "$BT/apksigner" verify --verbose dist/exploration-debug.apk
+          "$BT/zipalign" -c 4 dist/exploration-debug.apk
+          ls -lh dist/exploration-debug.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: exploration-debug-apk
+          path: dist/exploration-debug.apk
           if-no-files-found: error
